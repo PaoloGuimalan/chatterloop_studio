@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && node scripts/copy-ffmpeg.mjs && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node --test tests/contracts.test.mjs tests/engine.test.mjs",
+    "test": "node --test tests/contracts.test.mjs tests/engine.test.mjs tests/container.test.mjs",
     "postinstall": "node scripts/copy-ffmpeg.mjs"
   },
   "dependencies": {
