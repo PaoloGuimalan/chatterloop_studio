@@ -1,5 +1,6 @@
 import type {Client,Session} from './client';
 import type {Project} from '../editor/model';
+import {momentSource,hasSound} from '../editor/model';
 async function upload(client:Client,blob:Blob,name:string,purpose:string,signal:AbortSignal,onProgress:(progress:number)=>void){
   const created=await client.request('/media/uploads','POST',{purpose,files:[{name,size:blob.size,type:blob.type}]},signal);
   const plan=created.uploads?.[0];if(!plan?.uploadID)throw Error('Upload could not be prepared.');
@@ -23,6 +24,6 @@ export async function publishMoment(client:Client,session:Session,project:Projec
   if([...form.caption].length>120)throw Error('Keep the caption within 120 characters.');
   const video=await upload(client,output.video,'moment.mp4','moment',signal,p=>onProgress(p*.85));
   const poster=await upload(client,output.poster,'poster.jpg','moment_poster',signal,p=>onProgress(.85+p*.14));
-  const payload={content:{reference:{reference:video.url,referenceMediaType:'video/mp4',name:'moment.mp4'},data:form.caption},privacy:{status:form.privacy},allowReplies:form.allowReplies,tagging:{isTagged:false,users:[]},poster:{url:poster.url,w:output.width,h:output.height},source:project.clips.some(c=>project.assets.find(a=>a.id===c.assetId)?.kind==='video')?'video':'photo',hasAudio:project.audio.length>0||[...project.clips,...project.layers].some(c=>c.volume>0&&project.assets.find(a=>a.id===c.assetId)?.hasAudio)};
+  const payload={content:{reference:{reference:video.url,referenceMediaType:'video/mp4',name:'moment.mp4'},data:form.caption},privacy:{status:form.privacy},allowReplies:form.allowReplies,tagging:{isTagged:false,users:[]},poster:{url:poster.url,w:output.width,h:output.height},source:momentSource(project),hasAudio:hasSound(project)};
   return client.request('/posts/moments/create','POST',{token:await client.sign(payload)},signal);
 }

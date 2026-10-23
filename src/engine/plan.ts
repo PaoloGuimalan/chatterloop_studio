@@ -1,5 +1,7 @@
 import {duration,validateProject,type Project,type Asset,type Clip} from '../editor/model';
-export interface TextFile {name:string;start:number;duration:number;blob?:Blob}
+import {orderedOverlays} from '../editor/timelineRules';
+import {visibleMediaRect} from '../editor/geometry';
+export interface TextFile {name:string;layerId?:string;start:number;duration:number;blob?:Blob}
 export interface RenderOptions {edge:720|1080;publish:boolean;textFiles:TextFile[]}
 const number=(value:number)=>Number(value.toFixed(4));
 export function renderPlan(project:Project,options:RenderOptions){
@@ -8,7 +10,7 @@ export function renderPlan(project:Project,options:RenderOptions){
   const width=project.orientation==='portrait'?options.edge:options.edge*16/9;
   const height=project.orientation==='portrait'?options.edge*16/9:options.edge;
   const w=Math.round(width/2)*2,h=Math.round(height/2)*2;
-  const args=['-y','-f','lavfi','-i',`color=c=${project.background.color.replace('#','0x')}:s=${w}x${h}:r=30:d=${number(total)}`];
+  const args=['-y','-f','lavfi','-i',`color=c=black:s=${w}x${h}:r=30:d=${number(total)}`];
   const files:{name:string;asset?:Asset;text?:TextFile}[]=[],filters:string[]=[];
   let index=1,canvas='0:v';const audioLabels:string[]=[];
   const assetFor=(id:string)=>project.assets.find(asset=>asset.id===id)!;
@@ -27,17 +29,26 @@ export function renderPlan(project:Project,options:RenderOptions){
     const foreground=`fg${id}`;let source=`${id}:v`;
     if(!layer&&project.background.type==='blur'){
       filters.push(`[${source}]split=2[fgsrc${id}][bgsrc${id}]`);source=`fgsrc${id}`;
-      filters.push(`[bgsrc${id}]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},boxblur=20:2,setsar=1,format=rgba,setpts=PTS-STARTPTS+${start}/TB[bg${id}]`);
+      const cover=Math.max(w/asset.width,h/asset.height),cropW=Math.max(1,Math.floor(w/cover)),cropH=Math.max(1,Math.floor(h/cover));
+      filters.push(`[bgsrc${id}]crop=${cropW}:${cropH},scale=${Math.max(2,Math.round(w/8)*2)}:${Math.max(2,Math.round(h/8)*2)},boxblur=10:2,scale=${w}:${h},eq=brightness=-0.08,setsar=1,format=rgba,setpts=PTS-STARTPTS+${start}/TB[bg${id}]`);
       const result=`back${id}`;filters.push(`[${canvas}][bg${id}]overlay=0:0:enable='between(t,${start},${end})':eof_action=pass[${result}]`);canvas=result;
     }
-    const fit=Math.min(w/asset.width,h/asset.height)*clip.scale;
-    const sw=Math.max(2,Math.round(asset.width*fit/2)*2),sh=Math.max(2,Math.round(asset.height*fit/2)*2),angle=number(clip.rotation*Math.PI/180);
-    filters.push(`[${source}]scale=${sw}:${sh},setsar=1,format=rgba${angle?`,rotate=${angle}:ow=rotw(${angle}):oh=roth(${angle}):c=none`:''},setpts=PTS-STARTPTS+${start}/TB[${foreground}]`);
-    const result=`canvas${id}`;filters.push(`[${canvas}][${foreground}]overlay=x=W*${number(clip.x)}-w/2:y=H*${number(clip.y)}-h/2:enable='between(t,${start},${end})':eof_action=pass[${result}]`);canvas=result;
+    if(!layer&&project.background.type==='color'){
+      filters.push(`color=c=${project.background.color.replace('#','0x')}:s=${w}x${h}:r=30:d=${number(clip.duration)},format=rgba,setpts=PTS-STARTPTS+${start}/TB[bg${id}]`);
+      const result=`back${id}`;filters.push(`[${canvas}][bg${id}]overlay=0:0:enable='between(t,${start},${end})':eof_action=pass[${result}]`);canvas=result;
+    }
+    const part=visibleMediaRect(asset.width,asset.height,w,h,clip);
+    const sw=Math.max(2,Math.round(part.drawWidth/2)*2),sh=Math.max(2,Math.round(part.drawHeight/2)*2),angle=number(clip.rotation*Math.PI/180);
+    filters.push(`[${source}]format=rgba,crop=${part.width}:${part.height}:${part.left}:${part.top},scale=${sw}:${sh},setsar=1${angle?`,rotate=${angle}:ow=rotw(${angle}):oh=roth(${angle}):c=none`:''},setpts=PTS-STARTPTS+${start}/TB[${foreground}]`);
+    const result=`canvas${id}`;filters.push(`[${canvas}][${foreground}]overlay=x=${number(part.x)}-w/2:y=${number(part.y)}-h/2:enable='between(t,${start},${end})':eof_action=pass[${result}]`);canvas=result;
     if(asset.kind==='video'&&asset.hasAudio&&clip.volume>0)addSound(id,clip);
   };
-  project.clips.forEach(c=>visual(c,false));project.layers.forEach(c=>visual(c,true));
-  for(const text of options.textFiles){const id=index++;args.push('-loop','1','-framerate','30','-t',String(text.duration),'-i',text.name);files.push({name:text.name,text});filters.push(`[${id}:v]format=rgba,setpts=PTS-STARTPTS+${number(text.start)}/TB[text${id}]`);const result=`caption${id}`;filters.push(`[${canvas}][text${id}]overlay=0:0:enable='between(t,${number(text.start)},${number(text.start+text.duration)})':eof_action=pass[${result}]`);canvas=result;}
+  const drawText=(text:TextFile)=>{const id=index++;args.push('-loop','1','-framerate','30','-t',String(text.duration),'-i',text.name);files.push({name:text.name,text});filters.push(`[${id}:v]format=rgba,setpts=PTS-STARTPTS+${number(text.start)}/TB[text${id}]`);const result=`caption${id}`;filters.push(`[${canvas}][text${id}]overlay=0:0:enable='between(t,${number(text.start)},${number(text.start+text.duration)})':eof_action=pass[${result}]`);canvas=result;};
+  const drawn=new Set<TextFile>();project.clips.forEach(c=>visual(c,false));
+  for(const entry of orderedOverlays(project))if(entry.kind==='layers')visual(entry.item as Clip,true);else{
+    const text=options.textFiles.find(file=>file.layerId===entry.item.id);if(text){drawText(text);drawn.add(text);}
+  }
+  for(const text of options.textFiles)if(!drawn.has(text))drawText(text);
   for(const track of project.audio){const id=addInput(assetFor(track.assetId),track);addSound(id,track);}
   const silent=index;args.push('-f','lavfi','-t',String(number(total)),'-i','anullsrc=channel_layout=stereo:sample_rate=44100');
   filters.push(`[${silent}:a]atrim=duration=${number(total)}[silence]`);audioLabels.unshift('silence');

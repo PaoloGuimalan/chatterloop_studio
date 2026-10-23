@@ -1,4 +1,6 @@
 import {uid,type Asset,type Project,type TextLayer} from '../editor/model';
+import {watermarkImage} from './watermark';
+import {withDeadline} from './deadline';
 export async function importAsset(file:File):Promise<Asset>{
   const kind=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':file.type.startsWith('audio/')?'audio':null;
   if(!kind)throw Error(`${file.name}: choose a photo, video, or audio file.`);
@@ -18,11 +20,12 @@ export async function importAsset(file:File):Promise<Asset>{
 }
 export function paintText(ctx:CanvasRenderingContext2D,layer:TextLayer,width:number,height:number,baseWidth:number){
   ctx.save();
-  const scale=width/baseWidth,size=layer.size*scale,font=layer.font==='Georgia'?'Georgia, serif':layer.font==='monospace'?'monospace':'Inter, Arial, sans-serif';ctx.font=`${layer.bold?700:400} ${size}px ${font}`;ctx.textBaseline='middle';
+  const scale=width/baseWidth,size=layer.size*scale*(layer.scale??1),font=layer.font==='Georgia'?'Georgia, serif':layer.font==='monospace'?'monospace':'Inter, Arial, sans-serif';ctx.font=`${layer.bold?700:400} ${size}px ${font}`;ctx.textBaseline='middle';
   const lines=layer.text.split('\n'),lineHeight=size*1.25;
-  const widths=lines.map(line=>ctx.measureText(line).width),x=layer.x*width,y=layer.y*height;
+  const widths=lines.map(line=>ctx.measureText(line).width);let x=layer.x*width,y=layer.y*height;
+  if(layer.rotation){ctx.translate(x,y);ctx.rotate(layer.rotation*Math.PI/180);x=0;y=0;}
   const max=Math.max(1,...widths),left=layer.align==='center'?x-max/2:layer.align==='right'?x-max:x;
-  if(layer.boxed){ctx.fillStyle='#111827dd';ctx.fillRect(left-size*.25,y-lines.length*lineHeight/2-size*.15,max+size*.5,lines.length*lineHeight+size*.3);}
+  if(layer.boxed){const color=layer.color.replace('#','');const values=[0,2,4].map(i=>parseInt(color.slice(i,i+2),16)||0);ctx.fillStyle=values[0]*.2126+values[1]*.7152+values[2]*.0722>128?'#111827dd':'#ffffffdd';ctx.fillRect(left-size*.25,y-lines.length*lineHeight/2-size*.15,max+size*.5,lines.length*lineHeight+size*.3);}
   ctx.fillStyle=layer.color;ctx.textAlign=layer.align;
   lines.forEach((line,index)=>ctx.fillText(line,x,y+(index-(lines.length-1)/2)*lineHeight));
   ctx.restore();
@@ -33,9 +36,9 @@ export function textCanvas(layer:TextLayer,width:number,height:number,baseWidth:
   return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(Error('Text could not be rendered.')),'image/png'));
 }
 export async function textFiles(project:Project,width:number,height:number,watermark?:string){
-  await Promise.all([document.fonts.load('400 16px Inter'),document.fonts.load('700 16px Inter')]);
+  await withDeadline(Promise.all([document.fonts.load('400 16px Inter'),document.fonts.load('700 16px Inter')]),10000,'The editor fonts could not load. Reload Studio and retry.');
   const baseWidth=project.orientation==='portrait'?1080:1920;
-  const items=await Promise.all(project.texts.map(async(layer,index)=>({name:`text-${index}.png`,start:layer.start,duration:layer.duration,blob:await textCanvas(layer,width,height,baseWidth)})));
-  if(watermark){items.push({name:'watermark.png',start:0,duration:Math.max(...[...project.clips,...project.layers,...project.texts,...project.audio].map(item=>item.start+item.duration)),blob:await textCanvas({id:'mark',text:`chatterloop · @${watermark}`,x:.96,y:.96,size:24,bold:true,boxed:false,color:'#ffffff',align:'right',start:0,duration:1},width,height,baseWidth)});}
+  const items:{name:string;layerId?:string;start:number;duration:number;blob:Blob}[]=await Promise.all(project.texts.map(async(layer,index)=>({name:`text-${index}.png`,layerId:layer.id,start:layer.start,duration:layer.duration,blob:await textCanvas(layer,width,height,baseWidth)})));
+  if(watermark!==undefined){items.push({name:'watermark.png',start:0,duration:Math.max(...[...project.clips,...project.layers,...project.texts,...project.audio].map(item=>item.start+item.duration)),blob:await withDeadline(watermarkImage(watermark,width,height),15000,'The export signature could not load. Reload Studio and retry.')});}
   return items;
 }
