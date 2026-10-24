@@ -3,7 +3,8 @@ export interface Asset {id:string;name:string;kind:'image'|'video'|'audio';file:
 export interface Clip {id:string;assetId:string;start:number;duration:number;trimStart:number;volume:number;scale:number;rotation:number;x:number;y:number;lane?:number}
 export interface TextLayer {id:string;text:string;start:number;duration:number;x:number;y:number;size:number;color:string;bold:boolean;boxed:boolean;align:'left'|'center'|'right';font?:'Inter'|'Georgia'|'monospace';lane?:number;scale?:number;rotation?:number}
 export interface AudioTrack {id:string;assetId:string;start:number;duration:number;trimStart:number;volume:number;fadeIn:number;fadeOut:number;lane?:number;autoFades?:boolean}
-export interface Project {version:1;id:string;owner:Owner;contentType:'moment';name:string;orientation:'portrait'|'landscape';background:{type:'color'|'blur';color:string};assets:Asset[];clips:Clip[];layers:Clip[];texts:TextLayer[];audio:AudioTrack[];updatedAt:number}
+export interface MomentForm {caption:string;privacy:'public'|'connections';allowReplies:boolean}
+export interface Project {version:1;id:string;owner:Owner;contentType:'moment';name:string;orientation:'portrait'|'landscape';background:{type:'color'|'blur';color:string};assets:Asset[];clips:Clip[];layers:Clip[];texts:TextLayer[];audio:AudioTrack[];updatedAt:number;publishForm?:MomentForm}
 export const uid=()=>crypto.randomUUID();
 export function newProject(owner:Owner):Project{return{version:1,id:uid(),owner:{accountId:owner.accountId,entityId:owner.entityId},contentType:'moment',name:'Untitled moment',orientation:'portrait',background:{type:'blur',color:'#111827'},assets:[],clips:[],layers:[],texts:[],audio:[],updatedAt:Date.now()};}
 export function playbackSources(project:Project){return [...project.clips,...project.layers,...project.audio].map(item=>({id:item.id,assetId:item.assetId}));}

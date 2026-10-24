@@ -3,40 +3,49 @@ import {watermarkImage} from './watermark';
 import {withDeadline} from './deadline';
 import {compactOverlay} from './overlay';
 import type {TextFile} from './plan';
-export async function posterFromVideo(file:Blob,width:number,height:number,signal?:AbortSignal):Promise<Blob>{
+async function capturePoster(file:Blob,width:number,height:number,signal?:AbortSignal):Promise<Blob>{
   signal?.throwIfAborted();
   const url=URL.createObjectURL(file),video=document.createElement('video'),canvas=document.createElement('canvas');
-  video.preload='auto';video.muted=true;video.playsInline=true;
+  video.preload='auto';video.muted=true;video.playsInline=true;video.setAttribute('aria-hidden','true');video.style.cssText='position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:0;bottom:0';document.body.append(video);
   let abort:()=>void=()=>{};
   const cancelled=new Promise<never>((_,reject)=>{abort=()=>reject(signal?.reason||Error('Poster creation cancelled.'));signal?.addEventListener('abort',abort,{once:true});});
   const task=<T>(promise:Promise<T>)=>withDeadline(Promise.race([promise,cancelled]),15000,'The Moment poster could not be prepared. Please retry.');
   try{
-    await task(new Promise<void>((resolve,reject)=>{video.onloadeddata=()=>resolve();video.onerror=()=>reject(Error('This browser could not open the rendered video to create its poster.'));video.src=url;video.load();}));
+    await task(new Promise<void>((resolve,reject)=>{
+      const ready=()=>{if(video.readyState>=2)resolve();};
+      video.onloadeddata=ready;video.oncanplay=ready;video.onseeked=ready;
+      video.onloadedmetadata=()=>{video.currentTime=Math.min(.05,video.duration/2);ready();};
+      video.onerror=()=>reject(Error('This browser could not open the rendered video to create its poster.'));
+      video.src=url;video.load();void video.play().catch(()=>{/* Seeking/loadeddata can still deliver a paused frame. */});
+    }));video.pause();
     signal?.throwIfAborted();
     if(!video.videoWidth||!video.videoHeight)throw Error('The rendered video has no readable poster frame.');
     canvas.width=width;canvas.height=height;const context=canvas.getContext('2d');if(!context)throw Error('The Moment poster canvas is unavailable.');
     context.drawImage(video,0,0,width,height);
     return await task(new Promise<Blob>((resolve,reject)=>canvas.toBlob(blob=>blob?.type==='image/jpeg'?resolve(blob):reject(Error('The Moment poster could not be saved as JPEG.')),'image/jpeg',.9)));
   }finally{
-    signal?.removeEventListener('abort',abort);video.onloadeddata=null;video.onerror=null;video.removeAttribute('src');video.load();URL.revokeObjectURL(url);canvas.width=0;canvas.height=0;
+    signal?.removeEventListener('abort',abort);video.onloadeddata=null;video.onloadedmetadata=null;video.oncanplay=null;video.onseeked=null;video.onerror=null;video.pause();video.removeAttribute('src');video.load();video.remove();URL.revokeObjectURL(url);canvas.width=0;canvas.height=0;
   }
+}
+export async function posterFromVideo(file:Blob,width:number,height:number,signal?:AbortSignal,onRetry?:()=>void):Promise<Blob>{
+  for(let attempt=0;;attempt++)try{return await capturePoster(file,width,height,signal);}catch(error){if(attempt||signal?.aborted)throw error;onRetry?.();}
 }
 export async function importAsset(file:File):Promise<Asset>{
   const kind=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':file.type.startsWith('audio/')?'audio':null;
   if(!kind)throw Error(`${file.name}: choose a photo, video, or audio file.`);
-  if(file.size>300*1024*1024)throw Error('Choose files smaller than 300 MiB for browser editing.');
   const url=URL.createObjectURL(file);
+  let media:HTMLMediaElement|undefined;
   try{
     if(kind==='image'){
       const image=await new Promise<HTMLImageElement>((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(Error(`Cannot open ${file.name}`));image.src=url;});
       return{id:uid(),kind,name:file.name,file,width:image.naturalWidth,height:image.naturalHeight,duration:6,hasAudio:false};
     }
-    const element=document.createElement(kind==='video'?'video':'audio');element.preload='metadata';element.src=url;
-    await new Promise<void>((resolve,reject)=>{const timeout=setTimeout(()=>reject(Error('Media information timed out.')),12000);element.onloadedmetadata=()=>{clearTimeout(timeout);resolve();};element.onerror=()=>{clearTimeout(timeout);reject(Error(`This browser cannot preview ${file.name}. Try MP4, MP3 or WAV.`));};});
+    const element=media=document.createElement(kind==='video'?'video':'audio');element.preload='metadata';
+    await new Promise<void>((resolve,reject)=>{const timeout=setTimeout(()=>reject(Error('Media information timed out.')),12000);element.onloadedmetadata=()=>{clearTimeout(timeout);resolve();};element.onerror=()=>{clearTimeout(timeout);reject(Error(`This browser cannot preview ${file.name}. Try MP4, MP3 or WAV.`));};element.src=url;element.load();});
     if(!Number.isFinite(element.duration)||element.duration<=0)throw Error('This media has no readable duration.');
     const video=element as HTMLVideoElement;
     return{id:uid(),kind,name:file.name,file,duration:element.duration,width:kind==='video'?video.videoWidth:0,height:kind==='video'?video.videoHeight:0,hasAudio:kind==='audio'||!!((video as any).audioTracks?.length||(video as any).mozHasAudio||(video as any).webkitAudioDecodedByteCount)};
-  }finally{URL.revokeObjectURL(url);}
+  }finally{if(media){media.pause();media.onloadedmetadata=null;media.onerror=null;media.removeAttribute('src');media.load();}URL.revokeObjectURL(url);}
 }
 export function paintText(ctx:CanvasRenderingContext2D,layer:TextLayer,width:number,height:number,baseWidth:number){
   ctx.save();

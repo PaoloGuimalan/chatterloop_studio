@@ -12,11 +12,12 @@ interface Props {
   onRename:(name:string)=>void;
   onExport:()=>void;
   onShare:()=>void;
+  onLeave:()=>void;
 }
 
-export default function EditorHeader({name,saved,session,themeButton,disabled,onRename,onExport,onShare}:Props){
+export default function EditorHeader({name,saved,session,themeButton,disabled,onRename,onExport,onShare,onLeave}:Props){
   return <header className="app-header editor-header">
-    <Brand/>
+    <Brand onNavigate={onLeave}/>
     <div className="project-summary">
       <div className="project-title">
         <label className="project-name">

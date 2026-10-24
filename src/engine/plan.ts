@@ -2,7 +2,7 @@ import {duration,exportFrameRate,validateProject,type Project,type Asset,type Cl
 import {orderedOverlays} from '../editor/timelineRules';
 import {visibleMediaRect} from '../editor/geometry';
 export interface TextFile {name:string;layerId?:string;start:number;duration:number;blob?:Blob;x?:number;y?:number}
-export interface RenderOptions {edge:720|1080;publish:boolean;textFiles:TextFile[];threads?:number}
+export interface RenderOptions {edge:720|1080;publish:boolean;textFiles:TextFile[];threads?:number;bitrateScale?:number}
 const number=(value:number)=>Number(value.toFixed(4));
 export function renderPlan(project:Project,options:RenderOptions){
   validateProject(project);const total=duration(project),fps=exportFrameRate(project);
@@ -68,7 +68,7 @@ export function renderPlan(project:Project,options:RenderOptions){
   filters.push(`${audioLabels.map(label=>`[${label}]`).join('')}amix=inputs=${audioLabels.length}:duration=longest:normalize=0,alimiter=limit=0.95,atrim=duration=${number(total)}[audio]`);
   filters.push(`[${canvas}]format=yuv420p[video]`);
   // A 100 MiB Moment keeps a margin for AAC and container overhead.
-  const bitrate=options.publish?Math.min(12000000,Math.floor(100*1024*1024*.82*8/total)-128000):12000000;
+  const bitrate=options.publish?Math.floor(Math.min(12000000,Math.floor(100*1024*1024*.82*8/total)-128000)*(options.bitrateScale??1)):12000000;
   const threads=Math.max(1,Math.min(4,Math.floor(options.threads||1)));
   args.push('-filter_complex_threads','1','-filter_complex',filters.join(';'),'-map','[video]','-map','[audio]','-t',String(number(total)),'-r',String(fps),'-c:v','libx264','-preset','ultrafast','-crf','22','-maxrate',String(bitrate),'-bufsize',String(bitrate*2),'-pix_fmt','yuv420p','-c:a','aac','-b:a','128k','-movflags','+faststart','-threads',String(threads),'output.mp4');
   return{args,files,width:w,height:h,duration:total,fps};

@@ -34,7 +34,7 @@ test('Export then Share uses fresh workers and releases successful and failed re
     assert.equal(video.type,'video/mp4');assert.ok(video.size>100);assert.ok(workers.every(worker=>worker.closed));
     return new Blob(['browser-jpeg-fixture'.repeat(10)],{type:'image/jpeg'});
   }},'../platform/errors':load('platform/errors')};
-  for(const name of ['plan','probe','deadline','settings','progress'])modules['./'+name]=load('engine/'+name);
+  for(const name of ['plan','probe','deadline','settings','progress','files'])modules['./'+name]=load('engine/'+name);
   const api=load('engine/render',{require:name=>modules[name],location:{origin:'https://studio.example'},navigator:{hardwareConcurrency:1},crossOriginIsolated:false,performance});
   const p=load('editor/model').newProject({accountId:'a',entityId:'e'});p.background={type:'color',color:'#000000'};p.assets=[{id:'i',name:'i.png',kind:'image',file:new Blob([image],{type:'image/png'}),width:16,height:28,duration:6,hasAudio:false}];
   p.clips=[{id:'c',assetId:'i',start:0,duration:.5,trimStart:0,volume:0,x:.5,y:.5,scale:1,rotation:0}];
