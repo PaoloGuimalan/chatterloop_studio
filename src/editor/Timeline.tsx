@@ -1,9 +1,10 @@
-import {useEffect,useRef,useState,type PointerEvent} from 'react';
-import {ArrowDown,ArrowLeft,ArrowRight,ArrowUp,Copy,Film,Layers,Minus,Music,Plus,Scissors,Trash2,Type,VolumeX} from 'lucide-react';
+import {useEffect,useLayoutEffect,useRef,useState,type PointerEvent} from 'react';
+import {ArrowDown,ArrowLeft,ArrowRight,ArrowUp,ChevronDown,ChevronLeft,ChevronRight,ChevronUp,Copy,Film,Layers,Minus,Music,Plus,Scissors,Trash2,Type,VolumeX} from 'lucide-react';
 import {duration,type Project} from './model';
 import {laneCount,laneOf,orderedOverlays,slideItem,resizeItem,moveItem,liftClip,dropLayer,reorderClip,type Pick,type TimelineKind} from './timelineRules';
 import {timecode} from './Preview';
 import Waveform from './Waveform';
+import {timelineOverflow} from './overflow';
 
 export type Selection=Pick|null;
 export type TimelineAction='split'|'duplicate'|'delete'|'lift'|'main'|'forward'|'backward'|'previous'|'next'|'earlier'|'later'|'mute';
@@ -18,9 +19,21 @@ type Drag={before:Project;pick:Pick;edge?:'head'|'tail';x:number;y:number;scroll
 export default function Timeline({project,time,selection,urls,busy,onSelect,onSeek,onAction,onAdd,onEdit,onGestureStart,onGestureEnd,onResize}:Props){
   const [zoom,setZoom]=useState(1),[viewport,setViewport]=useState(600),[dragging,setDragging]=useState(false);
   const scroll=useRef<HTMLDivElement>(null),panel=useRef<HTMLElement>(null),drag=useRef<Drag>(),suppressClick=useRef(false);
+  const [overflow,setOverflow]=useState({left:false,right:false,up:false,down:false,above:0,below:0});
+  function measureOverflow(){
+    const element=scroll.current;if(!element)return;const box=element.getBoundingClientRect();
+    const rows=Array.from(element.querySelectorAll<HTMLElement>('.track-row')).map(row=>{const rect=row.getBoundingClientRect();return{top:rect.top,bottom:rect.bottom,occupied:row.dataset.occupied==='true'};});
+    const items=Array.from(element.querySelectorAll<HTMLElement>('.track-item')).map(item=>{const rect=item.getBoundingClientRect();return{left:rect.left,right:rect.right};});
+    const next=timelineOverflow({left:box.left+72,right:box.right,top:box.top+24,bottom:box.bottom},rows,items);
+    if(element.scrollLeft<=1)next.left=false;if(element.scrollTop<=1){next.up=false;next.above=0;}
+    setOverflow(previous=>(Object.keys(next) as (keyof typeof next)[]).every(key=>next[key]===previous[key])?previous:next);
+  }
+  function scrollPage(horizontal:number,vertical:number){const element=scroll.current;if(element)element.scrollBy({left:horizontal*Math.max(100,element.clientWidth*.7),top:vertical*Math.max(50,element.clientHeight*.75),behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});}
+  useEffect(()=>{const element=scroll.current;if(!element)return;let frame=0;const update=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(measureOverflow);};const observer=new ResizeObserver(update);observer.observe(element);if(element.firstElementChild)observer.observe(element.firstElementChild);element.addEventListener('scroll',update,{passive:true});update();return()=>{cancelAnimationFrame(frame);observer.disconnect();element.removeEventListener('scroll',update);};},[]);
   const pps=48*zoom,total=duration(project),span=Math.max(6,total+2,(viewport-72)/pps),width=72+span*pps;
   const selected=selection?project[selection.kind].find(x=>x.id===selection.id):undefined;
   const selectedHasAudio=selected&&'volume'in selected&&(!('assetId'in selected)||project.assets.find(asset=>asset.id===selected.assetId)?.kind!=='image');
+  useLayoutEffect(measureOverflow,[project,pps]);
   useEffect(()=>{const element=scroll.current;if(!element)return;const observer=new ResizeObserver(()=>setViewport(element.clientWidth));observer.observe(element);return()=>observer.disconnect();},[]);
   useEffect(()=>{const element=scroll.current;if(!element||dragging)return;const x=72+time*pps;if(x<element.scrollLeft+72)element.scrollLeft=Math.max(0,x-90);else if(x>element.scrollLeft+element.clientWidth-20)element.scrollLeft=x-element.clientWidth+40;},[time,pps,dragging]);
   function start(event:PointerEvent<HTMLDivElement>,pick:Pick,edge?:'head'|'tail'){
@@ -70,9 +83,10 @@ export default function Timeline({project,time,selection,urls,busy,onSelect,onSe
       {([{action:'split',label:'Split',Icon:Scissors},{action:'duplicate',label:'Duplicate',Icon:Copy},...(selection?.kind==='clips'?[{action:'lift',label:'To layer',Icon:Layers},{action:'earlier',label:'Move earlier',Icon:ArrowLeft},{action:'later',label:'Move later',Icon:ArrowRight}]:[]),...(selection?.kind==='layers'?[{action:'main',label:'To main',Icon:Film}]:[]),...(selection&&(selection.kind==='layers'||selection.kind==='texts')?[{action:'forward',label:'Forward',Icon:ArrowUp},{action:'backward',label:'Backward',Icon:ArrowDown}]:[]),{action:'previous',label:'Anchor previous',Icon:ArrowLeft},{action:'next',label:'Anchor next',Icon:ArrowRight},...(selectedHasAudio&&selected&&'volume'in selected?[{action:'mute',label:selected.volume?'Mute':'Unmute',Icon:VolumeX}]:[]),{action:'delete',label:'Delete',Icon:Trash2}] as {action:TimelineAction;label:string;Icon:typeof Plus}[]).map(({action,label,Icon})=><button key={action} disabled={busy||!selection} onClick={()=>onAction(action)}><Icon size={14}/><span>{label}</span></button>)}
       {selection&&<button onClick={()=>onSelect(null,time)}>Done</button>}
     </div>
-    <div className="timeline-scroll" ref={scroll}><div className="timeline-inner" style={{width,minWidth:'100%'}}>
+    <div className="timeline-viewport">
+    <div className="timeline-scroll" ref={scroll} tabIndex={0} role="region" aria-label="Timeline tracks"><div className="timeline-inner" style={{width,minWidth:'100%'}}>
       <div className="timeline-ruler"><div className="ruler-scale">{Array.from({length:Math.floor(span/step)+1},(_,index)=><span key={index} style={{left:index*step*pps}}>{timecode(index*step).replace(/\.\d$/,'')}</span>)}<input aria-label="Playhead" aria-valuetext={timecode(time)} type="range" min={0} max={span} step={.01} value={time} onChange={event=>onSeek(Math.min(total,Number(event.target.value)))}/></div></div>
-      {tracks.map(({kind,lane,label,items,Icon})=><div className={`track-row track-${kind} ${!items.length?'empty-lane':''}`} key={`${kind}-${lane}`}>
+      {tracks.map(({kind,lane,label,items,Icon})=><div className={`track-row track-${kind} ${!items.length?'empty-lane':''}`} data-occupied={items.length>0} key={`${kind}-${lane}`}>
         <button className="track-label" title={!items.length?`Add ${kind==='audio'?'audio':kind==='clips'?'media':'a layer'}`:label} disabled={busy} onClick={()=>onAdd(kind)}><Icon size={13}/><span>{label}</span></button>
         <div className="track-lane" data-track-kind={kind} data-lane={lane} onClick={event=>{if(suppressClick.current){suppressClick.current=false;return;}if(event.target===event.currentTarget){const box=event.currentTarget.getBoundingClientRect();onSelect(null,Math.min(total,Math.max(0,(event.clientX-box.left)/pps)));}}}>
           {items.map(({kind:itemKind,item})=>{
@@ -90,6 +104,13 @@ export default function Timeline({project,time,selection,urls,busy,onSelect,onSe
       </div>)}
       <div className="playhead" style={{left:72+time*pps}}/>
     </div></div>
-    <div className="timeline-help">Drag to slide · Drag edges to trim · Hold or Shift-drag to reorder · Drag between rows to move layers</div>
+    {(['left','right','up','down'] as const).map(edge=>overflow[edge]&&<div key={edge} className={`timeline-edge timeline-edge-${edge}`} aria-hidden="true"/>)}
+    {overflow.left&&<button className="timeline-page timeline-page-left" aria-label="Scroll timeline left" onClick={()=>scrollPage(-1,0)}><ChevronLeft size={13}/></button>}
+    {overflow.right&&<button className="timeline-page timeline-page-right" aria-label="Scroll timeline right" onClick={()=>scrollPage(1,0)}><ChevronRight size={13}/></button>}
+    </div>
+    <div className="timeline-help"><span className="timeline-help-text">Drag to slide · Drag edges to trim · Hold or Shift-drag to reorder · Drag between rows to move layers</span>
+      {overflow.up&&<button className="timeline-more" aria-label={`Scroll up${overflow.above?`, ${overflow.above} more ${overflow.above===1?'track':'tracks'} above`:''}`} onClick={()=>scrollPage(0,-1)}><ChevronUp size={11}/>{overflow.above>0&&<span>{overflow.above} {overflow.above===1?'track':'tracks'}</span>}</button>}
+      {overflow.down&&<button className="timeline-more" aria-label={`Scroll down${overflow.below?`, ${overflow.below} more ${overflow.below===1?'track':'tracks'} below`:''}`} onClick={()=>scrollPage(0,1)}>{overflow.below>0&&<span>{overflow.below} {overflow.below===1?'track':'tracks'}</span>}<ChevronDown size={11}/></button>}
+    </div>
   </section>;
 }

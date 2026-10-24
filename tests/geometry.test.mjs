@@ -29,3 +29,9 @@ test('a stalled worker stage times out, terminates work, and leaves successful w
   assert.equal(stopped,1);assert.equal(await withDeadline(Promise.resolve('ready'),5,'Unexpected timeout',()=>stopped++),'ready');
   await new Promise(resolve=>setTimeout(resolve,10));assert.equal(stopped,1);
 });
+test('overlay alpha bounds retain shadows, align to chroma pixels and handle empty text',()=>{
+  const {alphaBounds}=load('engine/overlay');assert.equal(typeof alphaBounds,'function');
+  const rgba=new Uint8Array(12*10*4);rgba[(3*12+3)*4+3]=1;rgba[(6*12+8)*4+3]=255;
+  const box=alphaBounds(rgba,12,10);assert.deepEqual(JSON.parse(JSON.stringify(box)),{x:2,y:2,width:8,height:6});
+  assert.deepEqual(JSON.parse(JSON.stringify(alphaBounds(new Uint8Array(12*10*4),12,10))),{x:0,y:0,width:2,height:2});
+});

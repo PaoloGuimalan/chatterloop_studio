@@ -1,6 +1,17 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {load} from './load.mjs';
+test('timeline overflow counts clipped occupied rows and ignores empty horizontal tail space',()=>{
+  const {timelineOverflow}=load('editor/overflow');assert.equal(typeof timelineOverflow,'function');
+  const view={left:72,right:500,top:24,bottom:200};
+  const visible=[{top:30,bottom:74,occupied:true}];
+  assert.deepEqual(JSON.parse(JSON.stringify(timelineOverflow(view,visible,[{left:72,right:450}]))),{left:false,right:false,up:false,down:false,above:0,below:0});
+  const rows=[{top:0,bottom:44,occupied:true},...visible,{top:180,bottom:224,occupied:true},{top:230,bottom:274,occupied:false}];
+  const state=timelineOverflow(view,rows,[{left:20,right:600}]);
+  assert.deepEqual(JSON.parse(JSON.stringify(state)),{left:true,right:true,up:true,down:true,above:1,below:1});
+  const empty=timelineOverflow(view,[...visible,{top:210,bottom:254,occupied:false}],[]);
+  assert.equal(empty.down,true);assert.equal(empty.below,0);assert.equal(empty.right,false);
+});
 const rules=()=>load('editor/timelineRules');
 const plain=value=>JSON.parse(JSON.stringify(value));
 const base=()=>load('editor/model').newProject({accountId:'account',entityId:'realm'});

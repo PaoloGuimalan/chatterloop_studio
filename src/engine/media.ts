@@ -1,6 +1,8 @@
 import {uid,type Asset,type Project,type TextLayer} from '../editor/model';
 import {watermarkImage} from './watermark';
 import {withDeadline} from './deadline';
+import {compactOverlay} from './overlay';
+import type {TextFile} from './plan';
 export async function importAsset(file:File):Promise<Asset>{
   const kind=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':file.type.startsWith('audio/')?'audio':null;
   if(!kind)throw Error(`${file.name}: choose a photo, video, or audio file.`);
@@ -38,7 +40,7 @@ export function textCanvas(layer:TextLayer,width:number,height:number,baseWidth:
 export async function textFiles(project:Project,width:number,height:number,watermark?:string){
   await withDeadline(Promise.all([document.fonts.load('400 16px Inter'),document.fonts.load('700 16px Inter')]),10000,'The editor fonts could not load. Reload Studio and retry.');
   const baseWidth=project.orientation==='portrait'?1080:1920;
-  const items:{name:string;layerId?:string;start:number;duration:number;blob:Blob}[]=await Promise.all(project.texts.map(async(layer,index)=>({name:`text-${index}.png`,layerId:layer.id,start:layer.start,duration:layer.duration,blob:await textCanvas(layer,width,height,baseWidth)})));
-  if(watermark!==undefined){items.push({name:'watermark.png',start:0,duration:Math.max(...[...project.clips,...project.layers,...project.texts,...project.audio].map(item=>item.start+item.duration)),blob:await withDeadline(watermarkImage(watermark,width,height),15000,'The export signature could not load. Reload Studio and retry.')});}
+  const items:TextFile[]=await Promise.all(project.texts.map(async(layer,index)=>({name:`text-${index}.png`,layerId:layer.id,start:layer.start,duration:layer.duration,...await compactOverlay(await textCanvas(layer,width,height,baseWidth),width,height)})));
+  if(watermark!==undefined){items.push({name:'watermark.png',start:0,duration:Math.max(...[...project.clips,...project.layers,...project.texts,...project.audio].map(item=>item.start+item.duration)),...await compactOverlay(await withDeadline(watermarkImage(watermark,width,height),15000,'The export signature could not load. Reload Studio and retry.'),width,height)});}
   return items;
 }
