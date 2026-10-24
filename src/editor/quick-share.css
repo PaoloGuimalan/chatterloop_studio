@@ -23,3 +23,5 @@
 .drop-label{position:sticky;top:0;z-index:4;padding:9px;border-radius:7px;background:var(--blue);color:white;font-size:11px;margin-bottom:10px;text-align:center}
 .leave-actions{flex-wrap:wrap}.danger-button{color:#dc6e66}
 @media(max-width:660px){.modal.quick-share{grid-template-columns:minmax(0,1fr);min-height:0;max-height:calc(100dvh - 24px)}.quick-preview{min-height:240px;height:32dvh;border-right:0;border-bottom:1px solid var(--border)}.quick-details{padding:18px}.quick-preview .quick-choose{bottom:16px;padding:9px 14px}.quick-identity{top:12px;left:14px}.quick-placeholder{padding-top:40px;padding-bottom:64px}.quick-placeholder>svg{display:none}.quick-footer{gap:9px}.quick-footer .modal-actions{margin-left:auto}}
+
+.quick-share .opening-status{flex-direction:row;align-items:center;gap:8px}.quick-share .opening-status>svg{flex-shrink:0}
