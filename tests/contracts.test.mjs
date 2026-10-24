@@ -10,9 +10,17 @@ test('worker failures remain visible when rejected as strings or message objects
   assert.equal(failureMessage(undefined,'Export failed'),'Export failed');
 });
 test('runtime configuration exposes only the browser protocol key and escapes inline JSON',()=>{
-  const value=runtimeConfig({VITE_STUDIO_HASH:'</script><script>x</script>',VITE_STUDIO_API_BASE:'https://api.example/',AUTHENTICATION_SECRET:'never-public'});
-  assert.deepEqual(Object.keys(value),['hash','apiBase']);
+  const value=runtimeConfig({VITE_STUDIO_HASH:'</script><script>x</script>',VITE_STUDIO_API_BASE:'https://api.example/',VITE_PUBLIC_APP_VERSION:'v1.2.3',AUTHENTICATION_SECRET:'never-public'});
+  assert.deepEqual(Object.keys(value),['hash','apiBase','appVersion']);assert.equal(value.appVersion,'v1.2.3');
   const html=injectConfig('<head></head>',value);assert.ok(!html.includes('never-public'));assert.ok(!html.includes('<script>x'));assert.ok(html.includes('\\u003c/script>'));
+});
+
+test('footer version follows runtime deployment configuration and falls back safely in development',()=>{
+  assert.equal(runtimeConfig({}).appVersion,'dev');assert.equal(runtimeConfig({APP_VERSION:'v2.0.0'}).appVersion,'v2.0.0');
+  assert.equal(runtimeConfig({VITE_PUBLIC_APP_VERSION:'v2.1.0',APP_VERSION:'v2.0.0'}).appVersion,'v2.1.0');
+  let content=JSON.stringify({appVersion:'v2.1.0'});
+  const {appVersion}=load('platform/version',{document:{getElementById:()=>({textContent:content})}});assert.equal(typeof appVersion,'function');
+  assert.equal(appVersion(),'v2.1.0');for(const invalid of ['{}','broken JSON','{"appVersion":42}']){content=invalid;assert.equal(appVersion(),'dev');}
 });
 test('session validation uses active realm identity and treats rejected sessions as authentication errors',async()=>{
   const token=`x.${Buffer.from(JSON.stringify({userID:'personal-account'})).toString('base64url')}.x`;

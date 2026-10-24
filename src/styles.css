@@ -10,3 +10,5 @@ body{margin:0}button,input,select,textarea{font:inherit;color:inherit}button,a,i
 .studio-success-header{display:flex;align-items:center;gap:5px}.studio-success-header>svg{flex-shrink:0}.studio-success-header strong{font-size:15px;font-weight:700}.studio-success-header button{margin-left:auto;width:25px;height:25px;padding:0;border:0;background:transparent;color:#fff}.studio-success-header button:hover:not(:disabled){background:#ffffff20}.studio-success-alert p{font-size:15px;color:#fff;text-align:left}
 .share-complete{text-align:center}.share-complete>svg{color:#279c70;margin:6px 0 18px}.share-complete>.primary{margin-top:10px;min-width:110px}
 @media(max-width:400px){.home-link{width:32px;height:32px;padding:7px}.home-link span{display:none}}
+
+.landing-footer{display:flex;flex-direction:column;align-items:center;gap:5px}.landing-footer .app-version{font-size:10px;opacity:.8}

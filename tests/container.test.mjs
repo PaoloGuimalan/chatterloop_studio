@@ -25,7 +25,7 @@ function startup(template) {
     writeFileSync(filter,program);return `  -f ${quote(filter)} \\\n`;
   });
   const result=spawnSync(shell,['-c',`jq() { ${quote(jq)} "$@"; }\n${source}`],{
-    env:{...process.env,STUDIO_HASH:'test-</script>-"-\\-key',STUDIO_API_BASE:'https://api.example/us/'},
+    env:{...process.env,STUDIO_HASH:'test-</script>-"-\\-key',STUDIO_API_BASE:'https://api.example/us/',VITE_PUBLIC_APP_VERSION:'v1.2.3'},
     stdio:['ignore','pipe','pipe'],encoding:'utf8',timeout:10000,
   });
   const html=readFileSync(output,'utf8');
@@ -42,7 +42,7 @@ test('container startup renders a complete document with closed stdin',
     const runtimeSource=html.match(/<script id="studio-runtime" type="application\/json">([^<]*)<\/script>/)[1];
     assert.doesNotThrow(()=>JSON.parse(runtimeSource),html);
     const runtime=JSON.parse(runtimeSource);
-    assert.deepEqual(runtime,{hash:'test-</script>-"-\\-key',apiBase:'https://api.example/us'});
+    assert.deepEqual(runtime,{hash:'test-</script>-"-\\-key',apiBase:'https://api.example/us',appVersion:'v1.2.3'});
     assert.ok(!html.includes('test-</script>'),'Runtime values must not escape their script element');
   });
 

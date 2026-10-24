@@ -10,12 +10,13 @@ output=$(mktemp /usr/share/nginx/html/studio/index.html.XXXXXX)
 trap 'rm -f "$output"' EXIT HUP INT TERM
 jq -ner --rawfile html /etc/studio-index.template.html \
   --arg hash "$STUDIO_HASH" --arg api "$STUDIO_API_BASE" \
+  --arg version "${VITE_PUBLIC_APP_VERSION:-${APP_VERSION:-dev}}" \
   '"<script id=\"studio-runtime\" type=\"application/json\">" as $marker |
     ($html|split($marker)) as $parts |
     if ($parts|length)==2 and ($parts[1]|contains("</script>")) then
       ($parts[1]|index("</script>")) as $end |
       $parts[0] + $marker +
-      ({hash:$hash,apiBase:($api|sub("/$";""))}|tojson|split("<")|join("\\u003c")) +
+      ({hash:$hash,apiBase:($api|sub("/$";"")),appVersion:$version}|tojson|split("<")|join("\\u003c")) +
       $parts[1][$end:]
     else error("Studio runtime marker missing from HTML template") end' \
   > "$output"
