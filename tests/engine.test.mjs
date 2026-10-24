@@ -10,7 +10,24 @@ test('render progress follows encoded output frames and ignores unrelated timest
   assert.equal(encodedFrameProgress('Duration: 00:00:30.0',60,30),undefined);
   assert.equal(encodedFrameProgress('[libx264] frame I:1',60,30),undefined);
 });
-test('Export then Share uses fresh workers and releases successful and failed render sessions',async()=>{
+
+test('quick-share encoding reports frame progress after video inspection silences the engine',async()=>{
+  globalThis.self={location:{href:'file:///ffmpeg-core.js'}};
+  const root=new URL('../node_modules/@ffmpeg/core/dist/esm/',import.meta.url);
+  const {default:createCore}=await import('data:text/javascript;base64,'+fs.readFileSync(new URL('ffmpeg-core.js',root)).toString('base64'));
+  const core=await createCore({wasmBinary:fs.readFileSync(new URL('ffmpeg-core.wasm',root))});
+  core.exec('-f','lavfi','-i','testsrc2=s=16x28:r=60:d=1','-c:v','libx264','-preset','ultrafast','source.mp4');assert.equal(core.ret,0);core.reset();
+  core.ffprobe('-v','error','-show_entries','stream=codec_type,avg_frame_rate,r_frame_rate','-of','json','source.mp4','-o','probe.json');core.reset();
+  const {quickProject}=load('editor/quickProject');
+  const p=quickProject({accountId:'a',entityId:'e'},{id:'v',name:'source.mp4',kind:'video',file:new Blob([],{type:'video/mp4'}),width:16,height:28,duration:1,fps:60,hasAudio:false});
+  const plan=load('engine/plan').renderPlan(p,{edge:16,publish:true,textFiles:[]});
+  for(const file of plan.files)core.FS.writeFile(file.name,core.FS.readFile('source.mp4'));
+  const updates=[],{encodedFrameProgress}=load('engine/progress');
+  core.setLogger(({message})=>{const progress=encodedFrameProgress(message,60,1);if(progress!==undefined)updates.push(progress);});
+  core.exec(...plan.args);assert.equal(core.ret,0);assert.ok(core.FS.readFile('output.mp4').length>100);
+  assert.ok(updates.some(value=>value>0),'Video sharing must report encoded frames instead of staying at 0% after ffprobe');
+});
+test('a cold 720p Export needs no 1080p warmup, then Share uses fresh workers and releases failed sessions',async()=>{
   globalThis.self={location:{href:'file:///ffmpeg-core.js'}};
   const root=new URL('../node_modules/@ffmpeg/core/dist/esm/',import.meta.url);
   const {default:createCore}=await import('data:text/javascript;base64,'+fs.readFileSync(new URL('ffmpeg-core.js',root)).toString('base64'));
@@ -39,7 +56,9 @@ test('Export then Share uses fresh workers and releases successful and failed re
   const p=load('editor/model').newProject({accountId:'a',entityId:'e'});p.background={type:'color',color:'#000000'};p.assets=[{id:'i',name:'i.png',kind:'image',file:new Blob([image],{type:'image/png'}),width:16,height:28,duration:6,hasAudio:false}];
   p.clips=[{id:'c',assetId:'i',start:0,duration:.5,trimStart:0,volume:0,x:.5,y:.5,scale:1,rotation:0}];
   const options={edge:16,publish:false,handle:'qa',base:'/studio/',onProgress:()=>{}};
-  const exported=await api.render(p,options);assert.ok(exported.video.size>100);assert.equal(workers[0].closed,true,'Completed export must not leave its worker for the subsequent Share');
+  const exported=await api.render(p,{...options,edge:720});assert.ok(exported.video.size>100);assert.equal(workers.length,1,'720p must start on its own first worker');assert.equal(workers[0].closed,true,'Completed export must not leave its worker for the subsequent Share');
+  seed.FS.writeFile('export720.mp4',new Uint8Array(await exported.video.arrayBuffer()));seed.reset();seed.ffprobe('-v','error','-show_entries','stream=width,height','-of','json','export720.mp4','-o','export720.json');
+  const dimensions=JSON.parse(seed.FS.readFile('export720.json',{encoding:'utf8'})).streams.find(stream=>stream.width);assert.equal(dimensions.width,720);assert.equal(dimensions.height,1280);
   const shared=await api.render(p,{...options,publish:true});assert.ok(shared.poster.size>100);
   assert.ok(!workers.some(worker=>worker.commands.some(args=>args.at(-1)==='poster.jpg')),'Poster JPEG must bypass the failing WASM MJPEG encoder');assert.ok(workers.every(worker=>worker.closed));
   const bad={...p,assets:[{...p.assets[0],file:new Blob(['invalid-image'])}]};await assert.rejects(api.render(bad,options));assert.equal(workers.at(-1).closed,true);

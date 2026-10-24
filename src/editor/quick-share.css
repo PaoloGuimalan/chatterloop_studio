@@ -10,9 +10,6 @@
 
 .quick-details{padding:24px;display:flex;flex-direction:column;min-width:0;gap:5px}
 .quick-details>.section-heading{margin-bottom:12px}
-.quick-share .segmented{display:flex;background:var(--surface2);padding:4px;border-radius:9px;margin-bottom:17px;gap:4px}
-.quick-share .segmented button{flex:1;border:0;background:transparent;padding:7px;font-size:11px}
-.quick-share .segmented button.active{background:var(--accent);color:var(--blue)}
 .quick-share .check-field{margin:4px 0 17px}
 .quick-edit{text-align:left;justify-content:flex-start;border-color:var(--border);background:var(--surface2);padding:12px;gap:12px;margin-bottom:12px}
 .quick-edit>svg{color:var(--blue);flex-shrink:0}

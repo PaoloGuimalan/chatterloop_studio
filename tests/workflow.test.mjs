@@ -1,6 +1,19 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {load} from './load.mjs';
+
+test('share success notices survive navigation once and stay scoped to entity and destination',()=>{
+  const values=new Map(),sessionStorage={getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};
+  const {rememberMomentShared,consumeMomentShared}=load('platform/shareNotice',{sessionStorage});
+  assert.equal(typeof rememberMomentShared,'function');
+  rememberMomentShared('page-entity','studio',1000);
+  assert.equal(consumeMomentShared('page-entity','studio',1100),'Your Moment is live for 24 hours.');
+  assert.equal(consumeMomentShared('page-entity','studio',1100),null);
+  rememberMomentShared('page-entity','webapp',1000);assert.equal(consumeMomentShared('person','webapp',1100),null);
+  rememberMomentShared('page-entity','webapp',1000);assert.equal(consumeMomentShared('page-entity','studio',1100),null);
+  rememberMomentShared('page-entity','webapp',1000);assert.equal(consumeMomentShared('page-entity','webapp',302000),null);
+  rememberMomentShared('page-entity','webapp',1000);assert.equal(consumeMomentShared('page-entity','webapp',900),null);
+});
 test('webapp entry stays temporary and returns to its page; successful sharing returns Home',()=>{
   const {entryContext,shareDestination,safeReturnTo}=load('platform/entry');assert.equal(typeof entryContext,'function');
   const web=entryContext('?compose=moment&from=webapp&returnTo=%2Fexplore%3Fq%3Dcoast');assert.equal(web.autosave,false);assert.equal(web.backTo,'/explore?q=coast');assert.equal(shareDestination(web),'/');

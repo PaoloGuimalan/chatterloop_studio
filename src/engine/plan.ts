@@ -14,7 +14,10 @@ export function renderPlan(project:Project,options:RenderOptions){
   // An opaque, untransformed MP4 covering the entire edit is already a canvas.
   // Keep it in YUV instead of blurring and compositing two hidden full frames.
   const directBase=single&&mainAsset?.kind==='video'&&mainAsset.file.type==='video/mp4'&&single.start===0&&Math.abs(single.duration-total)<1e-6&&single.x===.5&&single.y===.5&&single.scale===1&&single.rotation%360===0&&Math.abs(mainAsset.width/mainAsset.height-w/h)<1e-6?single.id:undefined;
-  const args=directBase?['-y']:['-y','-f','lavfi','-i',`color=c=black:s=${w}x${h}:r=${fps}:d=${number(total)}`];
+  // ffprobe's -v error survives core.reset(). Restore frame statistics for
+  // every render, including the first quick share after video inspection.
+  const args=['-y','-loglevel','info','-stats'];
+  if(!directBase)args.push('-f','lavfi','-i',`color=c=black:s=${w}x${h}:r=${fps}:d=${number(total)}`);
   const files:{name:string;asset?:Asset;text?:TextFile}[]=[],filters:string[]=[];
   let index=directBase?0:1,canvas='0:v';const audioLabels:string[]=[];
   const assetFor=(id:string)=>project.assets.find(asset=>asset.id===id)!;
