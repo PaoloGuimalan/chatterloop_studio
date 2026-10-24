@@ -22,6 +22,7 @@ export default function Preview({project,time,playing,setTime,setPlaying,history
     return()=>{for(const url of urls)URL.revokeObjectURL(url);for(const element of map.values())if(element instanceof HTMLMediaElement){element.pause();element.removeAttribute('src');element.load();}map.clear();for(const gain of gains.current.values())gain.disconnect();gains.current.clear();};
   },[project.assets,sourceKey]);
   useEffect(()=>{
+    if(busy){for(const element of media.current.values())if(element instanceof HTMLMediaElement)element.pause();return;}
     let frame=0;const draw=()=>{
       const {project:p,time:playhead,playing:play}=state.current,ctx=canvas.current?.getContext('2d');if(!ctx||!canvas.current)return;
       const t=Math.min(playhead,Math.max(0,duration(p)-1/30));
@@ -54,7 +55,7 @@ export default function Preview({project,time,playing,setTime,setPlaying,history
       for(const [id,element] of media.current)if(element instanceof HTMLMediaElement&&!audible.has(id))element.pause();
       frame=requestAnimationFrame(draw);
     };frame=requestAnimationFrame(draw);return()=>cancelAnimationFrame(frame);
-  },[]);
+  },[busy]);
   useEffect(()=>{if(!playing)for(const element of media.current.values())if(element instanceof HTMLMediaElement)element.pause();},[playing]);
   useEffect(()=>{const change=()=>setNativeFull(document.fullscreenElement===surface.current);document.addEventListener('fullscreenchange',change);const key=(e:KeyboardEvent)=>{if(e.key==='Escape')setExpanded(false);};addEventListener('keydown',key);return()=>{document.removeEventListener('fullscreenchange',change);removeEventListener('keydown',key);};},[]);
   const fullscreen=async()=>{if(document.fullscreenElement){await document.exitFullscreen();return;}if(expanded){setExpanded(false);return;}try{if(!surface.current?.requestFullscreen)throw Error();await surface.current.requestFullscreen();}catch{setExpanded(true);}};

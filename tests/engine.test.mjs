@@ -36,3 +36,41 @@ test('actual Studio export respects text/media lane order and safely crops zoome
   const pixels=core.FS.readFile('pixels.rgb'),i=(14*16+8)*3;
   assert.ok(pixels[i+1]>pixels[i]+100&&pixels[i+1]>pixels[i+2]+100,'Upper media must cover lower text in encoded pixels');
 });
+test('static export images decode once and retain their complete timed interval',async()=>{
+  globalThis.self={location:{href:'file:///ffmpeg-core.js'}};
+  const root=new URL('../node_modules/@ffmpeg/core/dist/esm/',import.meta.url);
+  const {default:createCore}=await import('data:text/javascript;base64,'+fs.readFileSync(new URL('ffmpeg-core.js',root)).toString('base64'));
+  const core=await createCore({wasmBinary:fs.readFileSync(new URL('ffmpeg-core.wasm',root))});
+  for(const color of ['red','blue']){core.exec('-f','lavfi','-i',`color=c=${color}:s=16x28`,'-frames:v','1',`${color}.png`);assert.equal(core.ret,0);core.reset();}
+  const p=load('editor/model').newProject({accountId:'a',entityId:'e'});
+  p.background={type:'color',color:'#000000'};
+  p.assets=[{id:'red',name:'red.png',kind:'image',file:new Blob(),width:16,height:28,duration:6}];
+  p.clips=[{id:'main',assetId:'red',start:0,duration:3,trimStart:0,volume:0,x:.5,y:.5,scale:1,rotation:0}];
+  const plan=load('engine/plan').renderPlan(p,{edge:16,publish:false,textFiles:[{name:'mark.png',start:1,duration:1}]});
+  assert.ok(!plan.args.includes('-loop'),'Static PNGs must not be decoded for every output frame');
+  for(const file of plan.files)core.FS.writeFile(file.name,core.FS.readFile(file.asset?'red.png':'blue.png'));
+  core.exec(...plan.args);assert.equal(core.ret,0);core.reset();
+  core.exec('-i','output.mp4','-f','rawvideo','-pix_fmt','rgb24','frames.rgb');assert.equal(core.ret,0);
+  const frames=core.FS.readFile('frames.rgb'),stride=plan.width*plan.height*3;
+  assert.equal(frames.length/stride,90);
+  for(const [frame,blue] of [[15,false],[45,true],[75,false]]){
+    const i=frame*stride+(14*16+8)*3;
+    assert.ok(blue?frames[i+2]>frames[i]+100:frames[i]>frames[i+2]+100,`Wrong still visibility at frame ${frame}`);
+  }
+});
+test('export workers respect browser isolation and cap CPU parallelism',()=>{
+  const {coreSettings}=load('engine/settings');
+  assert.equal(typeof coreSettings,'function');
+  assert.equal(coreSettings('/studio/',false,16).threads,1);
+  assert.equal(coreSettings('/studio/',true,1).threads,1);
+  const fast=coreSettings('/studio/',true,16);assert.equal(fast.threads,4);assert.equal(fast.corePath,'/studio/ffmpeg/mt/');
+  assert.equal(coreSettings('/studio/',true,2).threads,2);
+  const p=load('editor/model').newProject({accountId:'a',entityId:'e'});
+  p.assets=[{id:'v',name:'v.mp4',kind:'video',file:new Blob(),width:16,height:28,duration:1}];
+  p.clips=[{id:'c',assetId:'v',start:0,duration:1,trimStart:0,volume:1,x:.5,y:.5,scale:1,rotation:0}];
+  const args=load('engine/plan').renderPlan(p,{edge:16,publish:false,textFiles:[],threads:4}).args;
+  const input=args.indexOf('input-1.video');assert.deepEqual(Array.from(args.slice(input-3,input)),['-threads','1','-i']);
+  assert.equal(args[args.indexOf('-filter_complex_threads')+1],'1','Filter graphs must not exhaust the finite WASM worker pool');
+  assert.equal(args[args.lastIndexOf('-threads')+1],'4');
+  assert.equal(args.filter(value=>value==='lavfi').length,1,'Silence belongs in the composition graph, not an independent lavfi thread pool');
+});

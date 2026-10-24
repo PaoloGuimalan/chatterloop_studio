@@ -5,4 +5,8 @@ await mkdir(new URL('public/ffmpeg/',root),{recursive:true});
 for(const name of ['ffmpeg-core.js','ffmpeg-core.wasm']) {
   await copyFile(fileURLToPath(new URL(`node_modules/@ffmpeg/core/dist/esm/${name}`,root)),fileURLToPath(new URL(`public/ffmpeg/${name}`,root)));
 }
-await writeFile(new URL('public/ffmpeg/NOTICE.txt',root),'FFmpeg WebAssembly core 0.12.10 (@ffmpeg/core)\nLicense: GPL-2.0-or-later (core); MIT (JavaScript wrapper).\nSource and build instructions: https://github.com/ffmpegwasm/ffmpeg.wasm\nPackage: https://www.npmjs.com/package/@ffmpeg/core/v/0.12.10\nLicense text: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html\n');
+await mkdir(new URL('public/ffmpeg/mt/',root),{recursive:true});
+for(const name of ['ffmpeg-core.js','ffmpeg-core.wasm','ffmpeg-core.worker.js']) {
+  await copyFile(fileURLToPath(new URL(`node_modules/@ffmpeg/core-mt/dist/esm/${name}`,root)),fileURLToPath(new URL(`public/ffmpeg/mt/${name}`,root)));
+}
+await writeFile(new URL('public/ffmpeg/NOTICE.txt',root),'FFmpeg WebAssembly core 0.12.10 (@ffmpeg/core and @ffmpeg/core-mt)\nLicense: GPL-2.0-or-later (core); MIT (JavaScript wrapper).\nSource and build instructions: https://github.com/ffmpegwasm/ffmpeg.wasm\nPackages: https://www.npmjs.com/package/@ffmpeg/core/v/0.12.10 and https://www.npmjs.com/package/@ffmpeg/core-mt/v/0.12.10\nLicense text: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html\n');

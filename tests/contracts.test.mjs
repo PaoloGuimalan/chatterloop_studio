@@ -3,6 +3,12 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {load} from './load.mjs';
 import {runtimeConfig,injectConfig} from '../runtime-config.mjs';
+test('worker failures remain visible when rejected as strings or message objects',()=>{
+  const {failureMessage}=load('platform/errors');assert.equal(typeof failureMessage,'function');
+  assert.equal(failureMessage('RuntimeError: memory access out of bounds','Export failed'),'RuntimeError: memory access out of bounds');
+  assert.equal(failureMessage({message:'Encoder failed'},'Export failed'),'Encoder failed');
+  assert.equal(failureMessage(undefined,'Export failed'),'Export failed');
+});
 test('runtime configuration exposes only the browser protocol key and escapes inline JSON',()=>{
   const value=runtimeConfig({VITE_STUDIO_HASH:'</script><script>x</script>',VITE_STUDIO_API_BASE:'https://api.example/',AUTHENTICATION_SECRET:'never-public'});
   assert.deepEqual(Object.keys(value),['hash','apiBase']);
