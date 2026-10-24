@@ -3,6 +3,24 @@ import {watermarkImage} from './watermark';
 import {withDeadline} from './deadline';
 import {compactOverlay} from './overlay';
 import type {TextFile} from './plan';
+export async function posterFromVideo(file:Blob,width:number,height:number,signal?:AbortSignal):Promise<Blob>{
+  signal?.throwIfAborted();
+  const url=URL.createObjectURL(file),video=document.createElement('video'),canvas=document.createElement('canvas');
+  video.preload='auto';video.muted=true;video.playsInline=true;
+  let abort:()=>void=()=>{};
+  const cancelled=new Promise<never>((_,reject)=>{abort=()=>reject(signal?.reason||Error('Poster creation cancelled.'));signal?.addEventListener('abort',abort,{once:true});});
+  const task=<T>(promise:Promise<T>)=>withDeadline(Promise.race([promise,cancelled]),15000,'The Moment poster could not be prepared. Please retry.');
+  try{
+    await task(new Promise<void>((resolve,reject)=>{video.onloadeddata=()=>resolve();video.onerror=()=>reject(Error('This browser could not open the rendered video to create its poster.'));video.src=url;video.load();}));
+    signal?.throwIfAborted();
+    if(!video.videoWidth||!video.videoHeight)throw Error('The rendered video has no readable poster frame.');
+    canvas.width=width;canvas.height=height;const context=canvas.getContext('2d');if(!context)throw Error('The Moment poster canvas is unavailable.');
+    context.drawImage(video,0,0,width,height);
+    return await task(new Promise<Blob>((resolve,reject)=>canvas.toBlob(blob=>blob?.type==='image/jpeg'?resolve(blob):reject(Error('The Moment poster could not be saved as JPEG.')),'image/jpeg',.9)));
+  }finally{
+    signal?.removeEventListener('abort',abort);video.onloadeddata=null;video.onerror=null;video.removeAttribute('src');video.load();URL.revokeObjectURL(url);canvas.width=0;canvas.height=0;
+  }
+}
 export async function importAsset(file:File):Promise<Asset>{
   const kind=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':file.type.startsWith('audio/')?'audio':null;
   if(!kind)throw Error(`${file.name}: choose a photo, video, or audio file.`);

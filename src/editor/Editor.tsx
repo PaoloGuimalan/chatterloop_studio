@@ -89,7 +89,7 @@ export default function Editor({initial,session,client,themeButton}:{initial:Pro
   async function execute(){
     if(busy||!dialog)return;const mode=dialog,id=++runId.current;setBusy(true);setError('');setProgress(0);setProgressLabel('Preparing…');controller.current=new AbortController();
     try{
-      const output=await render(project,{edge,publish:mode==='share',handle:session.handle,base:import.meta.env.BASE_URL,onMetadata:assets=>{if(id===runId.current){dirty.current=true;setHistory(h=>({...h,now:{...h.now,assets}}));}},onProgress:(p,label)=>{if(id===runId.current){setProgress(p*(mode==='share'?.7:1));setProgressLabel(label);}}});
+      const output=await render(project,{edge,publish:mode==='share',handle:session.handle,base:import.meta.env.BASE_URL,signal:controller.current.signal,onMetadata:assets=>{if(id===runId.current){dirty.current=true;setHistory(h=>({...h,now:{...h.now,assets}}));}},onProgress:(p,label)=>{if(id===runId.current){setProgress(p*(mode==='share'?.7:1));setProgressLabel(label);}}});
       if(id!==runId.current||controller.current.signal.aborted)return;
       if(mode==='share'){
         if(!client||session.preview)throw Error('Sharing is disabled in local preview.');

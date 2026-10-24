@@ -2,6 +2,50 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {load} from './load.mjs';
+test('render progress follows encoded output frames and ignores unrelated timestamp reports',()=>{
+  const {encodedFrameProgress}=load('engine/progress');assert.equal(typeof encodedFrameProgress,'function');
+  assert.equal(encodedFrameProgress('frame=    1 fps=0.0 time=00:00:29.90',60,30),1/1800);
+  assert.equal(encodedFrameProgress('frame=  900 fps=30 time=00:00:15.0',60,30),.5);
+  assert.equal(encodedFrameProgress('frame= 1800 fps=60',60,30),.99);
+  assert.equal(encodedFrameProgress('Duration: 00:00:30.0',60,30),undefined);
+  assert.equal(encodedFrameProgress('[libx264] frame I:1',60,30),undefined);
+});
+test('Export then Share uses fresh workers and releases successful and failed render sessions',async()=>{
+  globalThis.self={location:{href:'file:///ffmpeg-core.js'}};
+  const root=new URL('../node_modules/@ffmpeg/core/dist/esm/',import.meta.url);
+  const {default:createCore}=await import('data:text/javascript;base64,'+fs.readFileSync(new URL('ffmpeg-core.js',root)).toString('base64'));
+  const wasmBinary=fs.readFileSync(new URL('ffmpeg-core.wasm',root)),seed=await createCore({wasmBinary});
+  seed.exec('-f','lavfi','-i','color=c=red:s=16x28','-frames:v','1','seed.png');assert.equal(seed.ret,0);
+  const image=seed.FS.readFile('seed.png'),workers=[];
+  // Adapter runs the real shipped core while exposing browser-worker lifetime.
+  class WorkerCore {
+    static crash=false;
+    loaded=false;closed=false;commands=[];events={log:new Set(),progress:new Set()};
+    constructor(){workers.push(this);}
+    async load(){this.core=await createCore({wasmBinary});this.core.setLogger(event=>this.events.log.forEach(handler=>handler(event)));this.loaded=true;}
+    on(event,handler){this.events[event].add(handler);}off(event,handler){this.events[event].delete(handler);}
+    async exec(args){this.commands.push(args);if(WorkerCore.crash){WorkerCore.crash=false;throw new WebAssembly.RuntimeError('memory access out of bounds');}this.core.exec(...args);const code=this.core.ret;this.core.reset();return code;}
+    async writeFile(name,data){this.core.FS.writeFile(name,data);}async readFile(name){return this.core.FS.readFile(name);}async deleteFile(name){this.core.FS.unlink(name);}
+    terminate(){this.closed=true;this.loaded=false;this.core=undefined;}
+  }
+  const modules={'@ffmpeg/ffmpeg':{FFmpeg:WorkerCore},'./media':{textFiles:async()=>[],posterFromVideo:async video=>{
+    // DOM decoding/JPEG canvas conversion is exercised in the browser. Here
+    // verify the real MP4 crosses that boundary after its WASM heap is freed.
+    assert.equal(video.type,'video/mp4');assert.ok(video.size>100);assert.ok(workers.every(worker=>worker.closed));
+    return new Blob(['browser-jpeg-fixture'.repeat(10)],{type:'image/jpeg'});
+  }},'../platform/errors':load('platform/errors')};
+  for(const name of ['plan','probe','deadline','settings','progress'])modules['./'+name]=load('engine/'+name);
+  const api=load('engine/render',{require:name=>modules[name],location:{origin:'https://studio.example'},navigator:{hardwareConcurrency:1},crossOriginIsolated:false,performance});
+  const p=load('editor/model').newProject({accountId:'a',entityId:'e'});p.background={type:'color',color:'#000000'};p.assets=[{id:'i',name:'i.png',kind:'image',file:new Blob([image],{type:'image/png'}),width:16,height:28,duration:6,hasAudio:false}];
+  p.clips=[{id:'c',assetId:'i',start:0,duration:.5,trimStart:0,volume:0,x:.5,y:.5,scale:1,rotation:0}];
+  const options={edge:16,publish:false,handle:'qa',base:'/studio/',onProgress:()=>{}};
+  const exported=await api.render(p,options);assert.ok(exported.video.size>100);assert.equal(workers[0].closed,true,'Completed export must not leave its worker for the subsequent Share');
+  const shared=await api.render(p,{...options,publish:true});assert.ok(shared.poster.size>100);
+  assert.ok(!workers.some(worker=>worker.commands.some(args=>args.at(-1)==='poster.jpg')),'Poster JPEG must bypass the failing WASM MJPEG encoder');assert.ok(workers.every(worker=>worker.closed));
+  const bad={...p,assets:[{...p.assets[0],file:new Blob(['invalid-image'])}]};await assert.rejects(api.render(bad,options));assert.equal(workers.at(-1).closed,true);
+  WorkerCore.crash=true;await assert.rejects(api.render(p,{...options,publish:true}),/memory error.*retry.*720p/i);assert.equal(workers.at(-1).closed,true,'A trapped WASM core must be released before retry');
+  const recovered=await api.render(p,{...options,publish:true});assert.ok(recovered.poster.size>100);assert.ok(workers.every(worker=>worker.closed));
+});
 test('used 60fps and faster clips select 60fps output, including fractional and overlay sources',()=>{
   const {exportFrameRate,newProject}=load('editor/model'),{videoMetadata}=load('engine/probe');assert.equal(typeof exportFrameRate,'function');assert.equal(typeof videoMetadata,'function');
   const meta=videoMetadata(JSON.stringify({streams:[{codec_type:'video',avg_frame_rate:'60000/1001',r_frame_rate:'60000/1001'},{codec_type:'audio'}]}),-1);
