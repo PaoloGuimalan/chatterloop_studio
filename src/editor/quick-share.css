@@ -10,6 +10,7 @@
 
 .quick-details{padding:24px;display:flex;flex-direction:column;min-width:0;gap:5px}
 .quick-details>.section-heading{margin-bottom:12px}
+.quick-duration-warning{padding:10px 12px;margin-bottom:12px;border:1px solid #c9983e66;border-radius:8px;background:#e4a72b18;color:var(--text);font-size:12px;line-height:1.6}
 .quick-share .check-field{margin:4px 0 17px}
 .quick-edit{text-align:left;justify-content:flex-start;border-color:var(--border);background:var(--surface2);padding:12px;gap:12px;margin-bottom:12px}
 .quick-edit>svg{color:var(--blue);flex-shrink:0}

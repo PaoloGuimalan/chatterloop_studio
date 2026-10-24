@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState,type ReactNode} from 'react';
-import {Maximize,Minimize,Play,Pause,SkipBack,SkipForward,Smartphone,PanelBottomClose,PanelBottomOpen} from 'lucide-react';
+import {Maximize,Minimize,Play,Pause,SkipBack,SkipForward,Smartphone,PanelBottomClose,PanelBottomOpen,AlertTriangle} from 'lucide-react';
 import {duration,playbackSources,type Project,type Clip} from './model';
 import {paintText} from '../engine/media';
 import {orderedOverlays,type Pick} from './timelineRules';
@@ -75,6 +75,7 @@ export default function Preview({project,time,playing,setTime,setPlaying,history
     <div className="preview-heading"><label className="canvas-format"><Smartphone size={14}/><select aria-label="Canvas orientation" disabled={busy} value={project.orientation} onChange={e=>onOrientationChange(e.target.value as Project['orientation'])}><option value="portrait">Portrait · 9:16</option><option value="landscape">Landscape · 16:9</option></select></label>
       <div className="preview-tools">{historyControls}<button className="icon-button" title={focusPreview?'Show editing panels':'Hide editing panels'} aria-label={focusPreview?'Show editing panels':'Hide editing panels'} onClick={onToggleFocus}>{focusPreview?<PanelBottomOpen size={17}/>:<PanelBottomClose size={17}/>}</button><button className="icon-button" title={expanded||nativeFull?'Exit fullscreen':'Fullscreen preview'} aria-label={expanded||nativeFull?'Exit fullscreen':'Fullscreen preview'} onClick={()=>void fullscreen()}>{expanded||nativeFull?<Minimize size={17}/>:<Maximize size={17}/>}</button></div>
     </div>
+    {duration(project)>120&&<div className="preview-duration-warning" role="status"><AlertTriangle size={16}/><span>This edit exceeds 2 minutes and cannot be shared as a Moment. Trim it to share, or export the full video.</span></div>}
     <div className="canvas-holder" ref={holder}><div ref={frame} className={`canvas-frame ${project.orientation}`} style={{width:size.width,height:size.height}} onPointerDown={event=>interaction.down(event)} onPointerMove={interaction.move} onPointerUp={event=>interaction.end(event)} onPointerCancel={event=>interaction.end(event,true)} onLostPointerCapture={event=>interaction.end(event,true)} onDoubleClick={doubleClick}>
       <canvas ref={canvas} aria-label="Moment composition"/>
       {empty&&<div className="canvas-empty"><span>Make this moment yours</span><small>Add a photo, clip or text to begin</small></div>}

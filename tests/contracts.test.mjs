@@ -31,6 +31,16 @@ test('a changed identity blocks old API requests; nonce/config failures remain r
   await assert.rejects(c.request('/media/uploads','POST',{}),error=>error instanceof m.AuthenticationError);assert.equal(called,1);
   changed=false;status=401;await assert.rejects(c.session(),error=>error instanceof m.AuthenticationError);
 });
+test('publishing rejects overlong Moments before preparing or transferring uploads',async()=>{
+  let requests=0,transfers=0;
+  const {publishMoment}=load('platform/publish',{fetch:async()=>{transfers++;return new Response('',{status:200});}});
+  const {newProject}=load('editor/model'),project=newProject({accountId:'a',entityId:'e'});
+  project.clips=[{id:'c',assetId:'v',start:0,duration:120.1}];
+  const client={request:async()=>{requests++;return{};},sign:async()=>{throw Error('An overlong Moment must never be signed');}};
+  await assert.rejects(publishMoment(client,{accountId:'a',entityId:'e'},project,{video:new Blob(['mp4']),poster:new Blob(['poster']),width:720,height:1280},{caption:'',privacy:'public',allowReplies:true},new AbortController().signal,()=>{}),/2 minutes/);
+  assert.equal(requests,0);assert.equal(transfers,0);
+});
+
 test('publishing uses existing signed Moment contract and direct storage PUTs without auth headers',async()=>{
   const requests=[],transfers=[];let signed;
   const m=load('platform/publish',{fetch:async(url,options)=>{transfers.push({url,...options});return new Response('',{status:200});}});

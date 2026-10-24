@@ -9,13 +9,14 @@ interface Props {
   session:Session;
   themeButton:ReactNode;
   disabled:boolean;
+  shareDisabled?:boolean;
   onRename:(name:string)=>void;
   onExport:()=>void;
   onShare:()=>void;
   onLeave:()=>void;
 }
 
-export default function EditorHeader({name,saved,session,themeButton,disabled,onRename,onExport,onShare,onLeave}:Props){
+export default function EditorHeader({name,saved,session,themeButton,disabled,shareDisabled=false,onRename,onExport,onShare,onLeave}:Props){
   return <header className="app-header editor-header">
     <Brand onNavigate={onLeave}/>
     <div className="project-summary">
@@ -34,7 +35,7 @@ export default function EditorHeader({name,saved,session,themeButton,disabled,on
     <div className="header-actions">
       {themeButton}
       <button title="Export video" aria-label="Export video" className="export-button" disabled={disabled} onClick={onExport}><Download size={17}/><span>Export</span></button>
-      <button className="primary share-button" title={session.preview?'Preview sharing options (publishing disabled)':'Share Moment'} disabled={disabled} onClick={onShare}><ArrowUpRight size={17}/><span>Share</span></button>
+      <button className="primary share-button" title={shareDisabled?'Trim this edit to 2 minutes or less to share a Moment.':session.preview?'Preview sharing options (publishing disabled)':'Share Moment'} disabled={disabled||shareDisabled} onClick={onShare}><ArrowUpRight size={17}/><span>Share</span></button>
       <Avatar session={session}/>
     </div>
   </header>;

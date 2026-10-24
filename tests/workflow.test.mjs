@@ -20,12 +20,20 @@ test('webapp entry stays temporary and returns to its page; successful sharing r
   const studio=entryContext('');assert.equal(studio.autosave,true);assert.equal(studio.backTo,'/studio/');assert.equal(shareDestination(studio),'/studio/');
   for(const path of ['https://evil.test','//evil.test','/\\evil.test','/%2f%2fevil.test','/studio/?compose=moment','/login'])assert.equal(safeReturnTo(path),'/');
 });
-test('quick-share rejects long videos but editor/export retain the full source',()=>{
+test('quick-share opens long videos for editing while only publishing enforces two minutes',()=>{
   const {quickProject}=load('editor/quickProject'),{newProject,clipFor}=load('editor/model');assert.equal(typeof quickProject,'function');
   const video={id:'v',name:'video.mp4',file:new Blob(),kind:'video',duration:120,width:1920,height:1080,fps:60,hasAudio:true};
   const owner={accountId:'a',entityId:'e'},project=quickProject(owner,video);assert.equal(project.clips[0].duration,120);assert.equal(project.orientation,'landscape');assert.equal(project.assets[0].fps,60);
   assert.equal(quickProject(owner,{...video,width:1620,height:1080}).clips[0].scale,1,'Quick share must keep all of the selected frame instead of automatically cropping it');
-  assert.throws(()=>quickProject(owner,{...video,duration:120.1}),/2 minutes/);assert.equal(clipFor({...video,duration:600},0).duration,600);assert.equal(newProject(owner).clips.length,0);
+  const {renderPlan}=load('engine/plan');
+  assert.equal(renderPlan(project,{edge:720,publish:true,textFiles:[]}).duration,120);
+  for(const length of [120.1,600]){
+    const longer=quickProject(owner,{...video,duration:length});assert.equal(longer.clips[0].duration,length);assert.equal(longer.assets[0].file,video.file);
+    assert.throws(()=>renderPlan(longer,{edge:720,publish:true,textFiles:[]}),/2 minutes/);
+    assert.equal(renderPlan(longer,{edge:720,publish:false,textFiles:[]}).duration,length);
+  }
+  assert.throws(()=>quickProject(owner,{...video,kind:'audio'}),/photo or video/);
+  assert.equal(clipFor({...video,duration:600},0).duration,600);assert.equal(newProject(owner).clips.length,0);
 });
 test('poster retries reuse a completed MP4 and a changed edit invalidates the render cache',async()=>{
   let renders=0,posters=0,fail=true;

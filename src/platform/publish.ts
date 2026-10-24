@@ -1,6 +1,6 @@
 import type {Client,Session} from './client';
 import type {Project} from '../editor/model';
-import {momentSource,hasSound} from '../editor/model';
+import {momentSource,hasSound,duration} from '../editor/model';
 async function upload(client:Client,blob:Blob,name:string,purpose:string,signal:AbortSignal,onProgress:(progress:number)=>void){
   const created=await client.request('/media/uploads','POST',{purpose,files:[{name,size:blob.size,type:blob.type}]},signal);
   const plan=created.uploads?.[0];if(!plan?.uploadID)throw Error('Upload could not be prepared.');
@@ -21,6 +21,7 @@ async function upload(client:Client,blob:Blob,name:string,purpose:string,signal:
 export async function publishMoment(client:Client,session:Session,project:Project,output:{video:Blob;poster:Blob|null;width:number;height:number},form:{caption:string;privacy:'public'|'connections';allowReplies:boolean},signal:AbortSignal,onProgress:(progress:number)=>void){
   if(session.preview)throw Error('Publishing is unavailable in local preview.');
   if(project.owner.accountId!==session.accountId||project.owner.entityId!==session.entityId)throw Error('This draft belongs to a different acting account.');
+  if(duration(project)>120)throw Error('Trim this Moment to 2 minutes or less before sharing.');
   if([...form.caption].length>120)throw Error('Keep the caption within 120 characters.');
   if(!output.poster)throw Error('The Moment poster is missing. Render this Moment again before sharing.');
   const video=await upload(client,output.video,'moment.mp4','moment',signal,p=>onProgress(p*.85));
