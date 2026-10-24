@@ -3,6 +3,23 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {load} from './load.mjs';
 import {runtimeConfig,injectConfig} from '../runtime-config.mjs';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+
+test('authentication boundary hides all Studio layout until the session is confirmed',()=>{
+  const {default:SessionGate}=load('SessionGate');assert.equal(typeof SessionGate,'function');
+  const layout=React.createElement('header',null,'Private Studio layout');
+  const pending=renderToStaticMarkup(React.createElement(SessionGate,{authenticated:false,onRetry:()=>{}},layout));
+  assert.match(pending,/class="spinner"/);assert.match(pending,/role="status"/);assert.ok(!pending.includes('Private Studio layout'));assert.ok(!pending.includes('<header'));assert.ok(!pending.includes('<footer'));assert.ok(!pending.includes('<button'));
+  const confirmed=renderToStaticMarkup(React.createElement(SessionGate,{authenticated:true,onRetry:()=>{}},layout));
+  assert.equal(confirmed,'<header>Private Studio layout</header>');
+});
+
+test('authentication network failures offer retry without exposing the Studio layout',()=>{
+  const {default:SessionGate}=load('SessionGate');assert.equal(typeof SessionGate,'function');
+  const html=renderToStaticMarkup(React.createElement(SessionGate,{authenticated:false,error:'Session service unavailable',onRetry:()=>{}},React.createElement('header',null,'Private Studio layout')));
+  assert.match(html,/Session service unavailable/);assert.match(html,/Try again/);assert.ok(!html.includes('Private Studio layout'));assert.ok(!html.includes('class="spinner"'));
+});
 test('worker failures remain visible when rejected as strings or message objects',()=>{
   const {failureMessage}=load('platform/errors');assert.equal(typeof failureMessage,'function');
   assert.equal(failureMessage('RuntimeError: memory access out of bounds','Export failed'),'RuntimeError: memory access out of bounds');

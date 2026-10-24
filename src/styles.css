@@ -12,3 +12,5 @@ body{margin:0}button,input,select,textarea{font:inherit;color:inherit}button,a,i
 @media(max-width:400px){.home-link{width:32px;height:32px;padding:7px}.home-link span{display:none}}
 
 .landing-footer{display:flex;flex-direction:column;align-items:center;gap:5px}.landing-footer .app-version{font-size:10px;opacity:.8}
+
+.startup-screen{min-height:100dvh;width:100%;display:grid;place-items:center;padding:24px;background:var(--bg)}.startup-loader{display:grid;place-items:center}.startup-loader .spinner{display:block;width:20px;height:20px}.startup-error{display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center;max-width:400px}.startup-error h1{font-size:20px}.startup-error p{font-size:12px;line-height:1.6;color:var(--muted)}
